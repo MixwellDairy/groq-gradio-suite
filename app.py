@@ -9,6 +9,7 @@ from pathlib import Path
 CHATS_FILE = "chats.json"
 UI_FILE = Path(__file__).with_name("index.html")
 MAX_REQUEST_SIZE = 35 * 1024 * 1024
+MAX_VOICE_HISTORY_MESSAGES = 16
 chats_lock = threading.Lock()
 client_lock = threading.Lock()
 client = None
@@ -127,31 +128,57 @@ def generate_speech(text, model_name, voice_name):
     return audio_bytes_to_base64(response)
 
 
+def sanitize_voice_history(history):
+    if not isinstance(history, list):
+        return []
+    sanitized = []
+    for message in history:
+        if not isinstance(message, dict):
+            continue
+        role = message.get("role")
+        content = message.get("content")
+        if role not in ("user", "assistant") or not isinstance(content, str):
+            continue
+        content = content.strip()
+        if content:
+            sanitized.append({"role": role, "content": content})
+    return sanitized[-MAX_VOICE_HISTORY_MESSAGES:]
+
+
 def run_voice_agent(audio_data, filename, agent_goal, agent_history):
     user_speech_text = transcribe_audio(
         audio_data, filename, "whisper-large-v3-turbo"
     )
     if not user_speech_text or not user_speech_text.strip():
-        return "(No speech detected)", "", None, agent_history
+        return "(No speech detected)", "", None, sanitize_voice_history(agent_history)
 
-    system_instructions = (
-        agent_goal.strip()
-        if agent_goal and agent_goal.strip()
-        else "You are a helpful, conversational voice assistant. Keep your replies concise and natural for speech."
+    custom_goal = agent_goal.strip() if isinstance(agent_goal, str) else ""
+    system_instructions = custom_goal or (
+        "You are a helpful, conversational voice assistant."
+    )
+    system_instructions += (
+        "\n\nFor this spoken conversation: keep replies concise, use natural "
+        "conversational language, avoid markdown tables and long lists, and "
+        "do not repeat the user's words unless useful."
     )
     messages = [{"role": "system", "content": system_instructions}]
-    messages.extend(agent_history)
+    messages.extend(sanitize_voice_history(agent_history))
     messages.append({"role": "user", "content": user_speech_text.strip()})
 
     completion = get_client().chat.completions.create(
         model="openai/gpt-oss-20b",
         messages=messages,
+        temperature=0.7,
+        max_tokens=300,
     )
-    agent_reply_text = completion.choices[0].message.content
-    updated_history = list(agent_history) + [
+    agent_reply_text = (completion.choices[0].message.content or "").strip()
+    if not agent_reply_text:
+        agent_reply_text = "I'm sorry, I couldn't generate a response. Please try again."
+    updated_history = sanitize_voice_history(agent_history) + [
         {"role": "user", "content": user_speech_text.strip()},
         {"role": "assistant", "content": agent_reply_text},
     ]
+    updated_history = updated_history[-MAX_VOICE_HISTORY_MESSAGES:]
     response = get_client().audio.speech.create(
         model="canopylabs/orpheus-v1-english",
         voice="troy",

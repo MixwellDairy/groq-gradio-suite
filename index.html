@@ -185,7 +185,7 @@
       <section id="agent" class="view">
         <div class="card">
           <h2>🤖 Hands-Free Voice Agent</h2>
-          <p class="muted">Set the agent's goal and speak naturally. It stops after about two seconds of silence, or after eight seconds without detected speech, then listens again after its spoken reply.</p>
+          <p class="muted">Set the agent's goal and speak naturally. It detects pauses automatically, stops after quiet speech, and listens again after its reply.</p>
           <div class="two-column">
             <div class="stack">
               <div class="field">
@@ -196,6 +196,7 @@
               <div class="row">
                 <button id="start-agent" class="primary grow">▶️ Start Hands-Free Conversation</button>
                 <button id="record-agent" class="grow">Record a Turn</button>
+                <button id="stop-agent-turn" class="grow" type="button" disabled>Stop Response</button>
               </div>
               <button id="reset-agent">🔄 Reset Conversation Memory</button>
               <p id="agent-status" class="status" role="status"></p>
@@ -605,6 +606,7 @@
       $("#record-agent").textContent = listening ? "Stop Listening" : "Record a Turn";
       $("#pro-record-agent").textContent = listening ? "Stop listening" : "Record a turn";
       $("#pro-stop-agent").disabled = !listening;
+      $("#stop-agent-turn").disabled = !(activePlayback && !$("#agent-audio").paused);
     }
     function drawAgentWaveform() {
       if (waveformFrame) return;
@@ -748,15 +750,31 @@
         const startedAt = Date.now();
         let hasSpoken = false;
         let silenceStart = startedAt;
+        let speechStart = 0;
+        let noiseSamples = [];
+        let noiseFloor = 0.018;
         voiceInterval = setInterval(() => {
           if (!analyser || mediaRecorder?.state !== "recording") return;
           analyser.getByteTimeDomainData(values);
           const rms = Math.sqrt(values.reduce((sum, value) => sum + (value - 128) ** 2, 0) / values.length) / 128;
-          if (rms > 0.025) {
+          const elapsed = Date.now() - startedAt;
+          if (!hasSpoken && elapsed < 700) {
+            noiseSamples.push(rms);
+            if (noiseSamples.length > 20) noiseSamples.shift();
+            noiseFloor = noiseSamples.reduce((sum, value) => sum + value, 0) / noiseSamples.length;
+          }
+          const speechThreshold = Math.max(0.018, noiseFloor * 2.2);
+          if (rms > speechThreshold) {
+            if (!speechStart) speechStart = Date.now();
+            if (Date.now() - speechStart >= 220) {
             hasSpoken = true;
             silenceStart = 0;
+            }
           } else if (hasSpoken && !silenceStart) {
             silenceStart = Date.now();
+            speechStart = 0;
+          } else if (!hasSpoken) {
+            speechStart = 0;
           }
           const silentTooLong = Date.now() - silenceStart > (hasSpoken ? 2000 : 8000);
           if (silentTooLong || Date.now() - startedAt > 45000) mediaRecorder.stop();
@@ -770,6 +788,9 @@
     }
     function stopAgentListening() {
       shouldContinueHandsFree = false;
+      [$("#agent-audio"), $("#pro-agent-audio")].forEach((player) => player.pause());
+      activePlayback = null;
+      setAgentWaveform(null);
       if (mediaRecorder?.state === "recording") mediaRecorder.stop();
       else {
         stopVoiceMonitoring();
@@ -804,22 +825,32 @@
     $("#record-agent").addEventListener("click", toggleAgentTurn);
     $("#pro-record-agent").addEventListener("click", toggleAgentTurn);
     $("#pro-stop-agent").addEventListener("click", stopAgentListening);
+    $("#stop-agent-turn").addEventListener("click", () => {
+      [$("#agent-audio"), $("#pro-agent-audio")].forEach((player) => player.pause());
+      activePlayback = null;
+      setAgentWaveform(null);
+      $("#stop-agent-turn").disabled = true;
+      setAgentStatus("Response stopped.");
+    });
     [$("#agent-audio"), $("#pro-agent-audio")].forEach((player) => {
       player.addEventListener("play", () => {
         try { monitorAgentPlayback(player); }
         catch (error) { console.warn("Could not display the playback waveform.", error); }
+        $("#stop-agent-turn").disabled = false;
       });
       player.addEventListener("pause", () => {
         if (activePlayback === player && !player.ended) {
           activePlayback = null;
           setAgentWaveform(null);
         }
+        $("#stop-agent-turn").disabled = true;
       });
       player.addEventListener("ended", () => {
         if (activePlayback === player) {
           activePlayback = null;
           setAgentWaveform(null);
         }
+        $("#stop-agent-turn").disabled = true;
         beginNextAgentTurn();
       });
     });
