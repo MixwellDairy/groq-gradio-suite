@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>Groq Multimodal Suite</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #10131d;
+      color: #eef0f6;
+      font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at top, #252b3e 0, #10131d 58%); }
+    button, input, textarea, select { font: inherit; }
+    button {
+      border: 1px solid #394158; border-radius: 10px; background: #252b3c;
+      color: #f6f7fb; padding: 10px 14px; cursor: pointer; transition: .15s ease;
+    }
+    button:hover { border-color: #9c8cff; background: #303750; }
+    button:disabled { opacity: .55; cursor: wait; }
+    button.primary { background: #7557ed; border-color: #7557ed; }
+    button.primary:hover { background: #866df2; }
+    button.danger { color: #ffaaa9; }
+    input, textarea, select {
+      width: 100%; color: #f6f7fb; background: #171b28; border: 1px solid #394158;
+      border-radius: 9px; padding: 11px 12px; outline: none;
+    }
+    input:focus, textarea:focus, select:focus { border-color: #9c8cff; box-shadow: 0 0 0 3px #7557ed30; }
+    textarea { resize: vertical; }
+    label { display: block; color: #b7bdd0; font-size: .9rem; margin-bottom: 7px; }
+    .shell { max-width: 1440px; margin: auto; padding: 24px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { font-size: 1.35rem; margin-bottom: 0; }
+    .brand { display: flex; gap: 12px; align-items: center; }
+    .brand-mark { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: #7557ed; font-size: 1.3rem; }
+    .brand small { display: block; color: #a4abc0; margin-top: 3px; }
+    nav { display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #30364a; margin-bottom: 20px; }
+    nav button { background: transparent; border: 0; border-radius: 8px 8px 0 0; color: #aeb5c9; }
+    nav button.active { background: #252b3c; color: white; box-shadow: inset 0 -2px #9c8cff; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .card { background: #1a1e2bdb; border: 1px solid #30364a; border-radius: 16px; padding: 20px; }
+    .chat-layout { display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); gap: 18px; }
+    .stack { display: grid; gap: 15px; align-content: start; }
+    .row { display: flex; gap: 9px; align-items: center; }
+    .row > * { min-width: 0; }
+    .row .grow { flex: 1; }
+    .chat-panel { display: flex; flex-direction: column; min-height: 75vh; }
+    .messages { overflow-y: auto; flex: 1; min-height: 300px; max-height: 65vh; padding: 4px 5px 16px; }
+    .message { max-width: 88%; padding: 12px 15px; margin: 10px 0; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+    .message.user { margin-left: auto; background: #403580; }
+    .message.assistant { background: #272d3d; border: 1px solid #353c51; }
+    .message.pending { color: #b8bed0; }
+    .composer { border-top: 1px solid #30364a; padding-top: 14px; }
+    .composer textarea { min-height: 52px; max-height: 180px; }
+    .muted, .status { color: #a8aec0; font-size: .9rem; }
+    .status { min-height: 1.3em; margin: 6px 0 0; }
+    .field { margin-bottom: 14px; }
+    .check { display: flex; align-items: center; gap: 9px; color: #d3d7e3; }
+    .check input { width: auto; accent-color: #927cf5; }
+    .section-heading { margin: 0 0 5px; }
+    .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .recording { color: #ff8e8e; }
+    audio { width: 100%; margin-top: 12px; }
+    .file-label { display: block; padding: 10px; border: 1px dashed #515a73; border-radius: 9px; }
+    .file-label input { border: 0; padding: 5px 0; background: transparent; }
+    @media (max-width: 800px) {
+      .shell { padding: 14px; }
+      .chat-layout, .two-column { grid-template-columns: 1fr; }
+      .chat-panel { min-height: 64vh; }
+      .messages { max-height: 55vh; }
+      header { align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">⚡</div>
+        <div><h1>Groq Multimodal Suite</h1><small>Chat, speech, and voice tools</small></div>
+      </div>
+    </header>
+    <nav aria-label="Application sections">
+      <button class="active" data-view="chat">💬 Chat &amp; Manager</button>
+      <button data-view="agent">🤖 Voice Agent</button>
+      <button data-view="stt">🎙️ Speech-to-Text</button>
+      <button data-view="tts">🔊 Text-to-Speech</button>
+    </nav>
+
+    <main>
+      <section id="chat" class="view active">
+        <div class="chat-layout">
+          <aside class="card stack">
+            <h2 class="section-heading">💬 Chat Manager</h2>
+            <button id="new-chat" class="primary">＋ New Chat</button>
+            <div class="field">
+              <label for="chat-select">Saved Conversations</label>
+              <select id="chat-select"></select>
+            </div>
+            <div class="field">
+              <label for="chat-title">Edit Chat Title</label>
+              <input id="chat-title" placeholder="Enter new title">
+            </div>
+            <div class="row">
+              <button id="rename-chat" class="grow">Save Title</button>
+              <button id="delete-chat" class="danger grow">Delete Chat</button>
+            </div>
+            <hr style="width:100%;border:0;border-top:1px solid #30364a">
+            <h3 class="section-heading">⚙️ Model &amp; Search</h3>
+            <div class="field">
+              <label for="chat-model">Groq Model</label>
+              <select id="chat-model">
+                <option>openai/gpt-oss-120b</option>
+                <option>openai/gpt-oss-20b</option>
+              </select>
+            </div>
+            <label class="check field"><input id="web-search" type="checkbox"> Enable DuckDuckGo Search</label>
+            <div class="field">
+              <label for="system-prompt">Custom System Prompt</label>
+              <textarea id="system-prompt" rows="3">You are a helpful, laid-back AI assistant.</textarea>
+            </div>
+          </aside>
+          <section class="card chat-panel">
+            <h2>⚡ Groq Local Assistant</h2>
+            <div id="messages" class="messages" aria-live="polite"></div>
+            <form id="chat-form" class="composer">
+              <div class="row">
+                <textarea id="chat-message" class="grow" placeholder="Type your message and press Enter..." aria-label="Message"></textarea>
+                <button id="send-chat" class="primary" type="submit">Send</button>
+              </div>
+              <p id="chat-status" class="status" role="status"></p>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section id="agent" class="view">
+        <div class="card">
+          <h2>🤖 Hands-Free Voice Agent</h2>
+          <p class="muted">Set the agent's goal, start a conversation, and speak naturally. It stops after a 1.5-second pause, then listens again after its spoken reply.</p>
+          <div class="two-column">
+            <div class="stack">
+              <div class="field">
+                <label for="agent-goal">Agent Goal / System Prompt</label>
+                <textarea id="agent-goal" rows="4">Inform the user that they got an A+ in all their classes with an enthusiastic, proud, and celebratory tone. Keep responses conversational and concise.</textarea>
+              </div>
+              <label class="check"><input id="hands-free" type="checkbox" checked> 🎙️ Hands-Free Auto-Listen (auto-stop on pause and resume after the AI speaks)</label>
+              <div class="row">
+                <button id="start-agent" class="primary grow">▶️ Start Hands-Free Conversation</button>
+                <button id="record-agent" class="grow">Record a Turn</button>
+              </div>
+              <button id="reset-agent">🔄 Reset Conversation Memory</button>
+              <p id="agent-status" class="status" role="status"></p>
+            </div>
+            <div class="stack">
+              <div><label for="agent-speech">1. What You Said (Whisper Turbo)</label><textarea id="agent-speech" rows="2" readonly></textarea></div>
+              <div><label for="agent-reply">2. Agent Reply (GPT OSS 20B)</label><textarea id="agent-reply" rows="4" readonly></textarea></div>
+              <div><label>3. Spoken Response (Orpheus - Troy)</label><audio id="agent-audio" controls autoplay></audio></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="stt" class="view">
+        <div class="card">
+          <h2>🎙️ Groq Whisper Speech-to-Text</h2>
+          <p class="muted">Record your voice or upload an audio file to transcribe it.</p>
+          <div class="two-column">
+            <div class="stack">
+              <label class="file-label">Audio Input (Record or Upload)<input id="stt-file" type="file" accept="audio/*"></label>
+              <div class="row"><button id="record-stt" class="grow">Record from microphone</button><button id="stop-stt" class="grow" disabled>Stop recording</button></div>
+              <div class="field">
+                <label for="stt-model">Whisper Model</label>
+                <select id="stt-model"><option>whisper-large-v3-turbo</option><option>whisper-large-v3</option></select>
+              </div>
+              <button id="transcribe" class="primary">Transcribe Audio</button>
+              <p id="stt-status" class="status" role="status"></p>
+            </div>
+            <div><label for="stt-result">Transcription Result</label><textarea id="stt-result" rows="14" readonly></textarea></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tts" class="view">
+        <div class="card">
+          <h2>🔊 Groq Orpheus Text-to-Speech</h2>
+          <p class="muted">Convert text into natural speech. Try tags like [cheerful] or [whisper] for voice styling.</p>
+          <div class="two-column">
+            <div class="stack">
+              <div><label for="tts-text">Text to Convert</label><textarea id="tts-text" rows="5" placeholder="Type something here... e.g. [cheerful] Hello! Welcome to the app."></textarea></div>
+              <div class="field">
+                <label for="tts-model">TTS Model</label>
+                <select id="tts-model"><option>canopylabs/orpheus-v1-english</option></select>
+              </div>
+              <div class="field">
+                <label for="tts-voice">Voice Persona</label>
+                <select id="tts-voice"><option>troy</option><option>autumn</option><option>diana</option><option>hannah</option><option>austin</option><option>daniel</option></select>
+              </div>
+              <button id="generate-speech" class="primary">Generate Speech</button>
+              <p id="tts-status" class="status" role="status"></p>
+            </div>
+            <div><label>Generated Audio Output</label><audio id="tts-audio" controls></audio></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const $ = (selector) => document.querySelector(selector);
+    let chats = {};
+    let currentChatId = null;
+    let agentHistory = [];
+    let mediaRecorder = null;
+    let microphoneStream = null;
+    let audioContext = null;
+    let analyser = null;
+    let voiceInterval = null;
+    let shouldContinueHandsFree = false;
+    let busyWithAgent = false;
+
+    async function request(url, options = {}) {
+      const response = await fetch(url, {
+        ...options,
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `Request failed (${response.status})`);
+      return result;
+    }
+    function setStatus(selector, text, isError = false) {
+      const target = $(selector);
+      target.textContent = text;
+      target.style.color = isError ? "#ffaaa9" : "";
+    }
+    function renderChatList() {
+      const selector = $("#chat-select");
+      selector.replaceChildren();
+      Object.entries(chats).forEach(([id, chat]) => {
+        const option = document.createElement("option");
+        option.value = id;
+        option.textContent = chat.title;
+        selector.append(option);
+      });
+      selector.value = currentChatId;
+    }
+    function renderMessages(messages = []) {
+      const container = $("#messages");
+      container.replaceChildren();
+      messages.forEach((message) => {
+        const bubble = document.createElement("div");
+        bubble.className = `message ${message.role === "user" ? "user" : "assistant"}${message.content ? "" : " pending"}`;
+        bubble.textContent = message.content || "Thinking…";
+        container.append(bubble);
+      });
+      container.scrollTop = container.scrollHeight;
+    }
+    function selectChat(id) {
+      if (!chats[id]) return;
+      currentChatId = id;
+      $("#chat-title").value = chats[id].title;
+      $("#chat-select").value = id;
+      renderMessages(chats[id].messages);
+    }
+    function audioDataUrl(encoded) {
+      return encoded ? `data:audio/wav;base64,${encoded}` : "";
+    }
+    async function fileAsBase64(file) {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Could not read the audio file."));
+        reader.readAsDataURL(file);
+      });
+      return dataUrl.split(",", 2)[1];
+    }
+    async function getMicrophone() {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("Microphone recording is not supported in this browser.");
+      if (!microphoneStream) microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      return microphoneStream;
+    }
+    function createRecorder(stream, onComplete) {
+      const options = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? { mimeType: "audio/webm;codecs=opus" } : {};
+      const recorder = new MediaRecorder(stream, options);
+      const chunks = [];
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      recorder.onstop = () => onComplete(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
+      return recorder;
+    }
+    function blobAsBase64(blob) {
+      const file = new File([blob], `recording.${blob.type.includes("ogg") ? "ogg" : "webm"}`, { type: blob.type });
+      return fileAsBase64(file).then((audio) => ({ audio, filename: file.name }));
+    }
+
+    document.querySelectorAll("nav button").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll("nav button").forEach((tab) => tab.classList.toggle("active", tab === button));
+        document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === button.dataset.view));
+      });
+    });
+
+    $("#chat-select").addEventListener("change", (event) => selectChat(event.target.value));
+    $("#new-chat").addEventListener("click", async () => {
+      try {
+        const result = await request("/api/chats", { method: "POST", body: "{}" });
+        chats = result.chats;
+        selectChat(result.id);
+        renderChatList();
+      } catch (error) { setStatus("#chat-status", error.message, true); }
+    });
+    $("#rename-chat").addEventListener("click", async () => {
+      if (!currentChatId) return;
+      try {
+        const result = await request(`/api/chats/${encodeURIComponent(currentChatId)}`, {
+          method: "PUT", body: JSON.stringify({ title: $("#chat-title").value })
+        });
+        chats = result.chats;
+        renderChatList();
+        setStatus("#chat-status", "Conversation title saved.");
+      } catch (error) { setStatus("#chat-status", error.message, true); }
+    });
+    $("#delete-chat").addEventListener("click", async () => {
+      if (!currentChatId || !confirm("Delete this conversation?")) return;
+      try {
+        const result = await request(`/api/chats/${encodeURIComponent(currentChatId)}`, { method: "DELETE" });
+        chats = result.chats;
+        selectChat(result.id);
+        renderChatList();
+      } catch (error) { setStatus("#chat-status", error.message, true); }
+    });
+    $("#chat-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const message = $("#chat-message").value;
+      if (!message.trim() || !currentChatId) return;
+      $("#chat-message").value = "";
+      $("#send-chat").disabled = true;
+      setStatus("#chat-status", "Connecting to Groq…");
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message, chat_id: currentChatId,
+            system_prompt: $("#system-prompt").value,
+            model: $("#chat-model").value,
+            enable_search: $("#web-search").checked
+          })
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Could not send message.");
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split("\n\n");
+          buffer = events.pop();
+          for (const eventText of events) {
+            const line = eventText.split("\n").find((item) => item.startsWith("data: "));
+            if (!line) continue;
+            const update = JSON.parse(line.slice(6));
+            if (update.chat_id !== currentChatId) continue;
+            if (update.chats) { chats = update.chats; renderChatList(); }
+            renderMessages(update.messages);
+          }
+        }
+        setStatus("#chat-status", "");
+      } catch (error) { setStatus("#chat-status", error.message, true); }
+      finally { $("#send-chat").disabled = false; }
+    });
+    $("#chat-message").addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        $("#chat-form").requestSubmit();
+      }
+    });
+
+    async function startAgentRecording() {
+      if (busyWithAgent || (mediaRecorder && mediaRecorder.state === "recording")) return;
+      const stream = await getMicrophone();
+      mediaRecorder = createRecorder(stream, async (blob) => {
+        if (voiceInterval) clearInterval(voiceInterval);
+        voiceInterval = null;
+        if (!blob.size) return;
+        busyWithAgent = true;
+        $("#record-agent").textContent = "Record a Turn";
+        setStatus("#agent-status", "Transcribing and preparing a response…");
+        try {
+          const input = await blobAsBase64(blob);
+          const result = await request("/api/voice", {
+            method: "POST",
+            body: JSON.stringify({ ...input, goal: $("#agent-goal").value, history: agentHistory })
+          });
+          $("#agent-speech").value = result.speech;
+          $("#agent-reply").value = result.reply;
+          agentHistory = result.history;
+          if (result.audio) {
+            $("#agent-audio").src = audioDataUrl(result.audio);
+            $("#agent-audio").load();
+            $("#agent-audio").play().catch(() => {});
+          }
+          setStatus("#agent-status", "Response ready.");
+        } catch (error) { setStatus("#agent-status", error.message, true); }
+        finally { busyWithAgent = false; }
+      });
+      mediaRecorder.start();
+      $("#record-agent").textContent = "Stop Recording";
+      if ($("#hands-free").checked && shouldContinueHandsFree) {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        const values = new Uint8Array(analyser.frequencyBinCount);
+        let hasSpoken = false;
+        let silenceStart = 0;
+        voiceInterval = setInterval(() => {
+          if (!analyser || !mediaRecorder || mediaRecorder.state !== "recording") return;
+          analyser.getByteFrequencyData(values);
+          const volume = values.reduce((total, value) => total + value, 0) / values.length;
+          if (volume > 18) { hasSpoken = true; silenceStart = 0; }
+          else if (hasSpoken) {
+            if (!silenceStart) silenceStart = Date.now();
+            else if (Date.now() - silenceStart > 1500) mediaRecorder.stop();
+          }
+        }, 100);
+      }
+    }
+    $("#start-agent").addEventListener("click", async () => {
+      shouldContinueHandsFree = true;
+      try {
+        await startAgentRecording();
+        setStatus("#agent-status", "Listening. Speak when ready.");
+      } catch (error) { setStatus("#agent-status", error.message, true); }
+    });
+    $("#record-agent").addEventListener("click", async () => {
+      if (mediaRecorder?.state === "recording") {
+        mediaRecorder.stop();
+      } else {
+        shouldContinueHandsFree = false;
+        try { await startAgentRecording(); setStatus("#agent-status", "Recording… press Stop Recording when finished."); }
+        catch (error) { setStatus("#agent-status", error.message, true); }
+      }
+    });
+    $("#agent-audio").addEventListener("ended", async () => {
+      if (shouldContinueHandsFree && $("#hands-free").checked) {
+        try { await startAgentRecording(); setStatus("#agent-status", "Listening for your next turn."); }
+        catch (error) { setStatus("#agent-status", error.message, true); }
+      }
+    });
+    $("#reset-agent").addEventListener("click", () => {
+      agentHistory = [];
+      $("#agent-speech").value = "";
+      $("#agent-reply").value = "";
+      $("#agent-audio").removeAttribute("src");
+      shouldContinueHandsFree = false;
+      if (mediaRecorder?.state === "recording") mediaRecorder.stop();
+      setStatus("#agent-status", "Conversation memory reset.");
+    });
+
+    let sttRecorder = null;
+    $("#record-stt").addEventListener("click", async () => {
+      try {
+        const stream = await getMicrophone();
+        sttRecorder = createRecorder(stream, (blob) => {
+          const extension = blob.type.includes("ogg") ? "ogg" : "webm";
+          const transfer = new DataTransfer();
+          transfer.items.add(new File([blob], `recording.${extension}`, { type: blob.type }));
+          $("#stt-file").files = transfer.files;
+          $("#stop-stt").disabled = true;
+          $("#record-stt").disabled = false;
+        });
+        sttRecorder.start();
+        $("#record-stt").disabled = true;
+        $("#stop-stt").disabled = false;
+        setStatus("#stt-status", "Recording…");
+      } catch (error) { setStatus("#stt-status", error.message, true); }
+    });
+    $("#stop-stt").addEventListener("click", () => { if (sttRecorder?.state === "recording") sttRecorder.stop(); });
+    $("#transcribe").addEventListener("click", async () => {
+      const file = $("#stt-file").files[0];
+      if (!file) { setStatus("#stt-status", "Please record or upload an audio file first.", true); return; }
+      $("#transcribe").disabled = true;
+      setStatus("#stt-status", "Transcribing…");
+      try {
+        const result = await request("/api/stt", {
+          method: "POST",
+          body: JSON.stringify({ audio: await fileAsBase64(file), filename: file.name, model: $("#stt-model").value })
+        });
+        $("#stt-result").value = result.text;
+        setStatus("#stt-status", "Transcription complete.");
+      } catch (error) { setStatus("#stt-status", error.message, true); }
+      finally { $("#transcribe").disabled = false; }
+    });
+
+    $("#generate-speech").addEventListener("click", async () => {
+      if (!$("#tts-text").value.trim()) { setStatus("#tts-status", "Please enter some text first.", true); return; }
+      $("#generate-speech").disabled = true;
+      setStatus("#tts-status", "Generating speech…");
+      try {
+        const result = await request("/api/tts", {
+          method: "POST",
+          body: JSON.stringify({ text: $("#tts-text").value, model: $("#tts-model").value, voice: $("#tts-voice").value })
+        });
+        $("#tts-audio").src = audioDataUrl(result.audio);
+        $("#tts-audio").load();
+        setStatus("#tts-status", "✅ Speech generated successfully!");
+      } catch (error) { setStatus("#tts-status", error.message, true); }
+      finally { $("#generate-speech").disabled = false; }
+    });
+
+    (async () => {
+      try {
+        chats = await request("/api/chats");
+        currentChatId = Object.keys(chats)[0];
+        selectChat(currentChatId);
+        renderChatList();
+      } catch (error) { setStatus("#chat-status", error.message, true); }
+    })();
+  </script>
+</body>
+</html>
