@@ -69,6 +69,42 @@
     audio { width: 100%; margin-top: 12px; }
     .file-label { display: block; padding: 10px; border: 1px dashed #515a73; border-radius: 9px; }
     .file-label input { border: 0; padding: 5px 0; background: transparent; }
+    .mode-switch { display: flex; padding: 4px; gap: 4px; background: #171b28; border: 1px solid #394158; border-radius: 12px; }
+    .mode-switch button { border: 0; background: transparent; color: #aeb5c9; }
+    .mode-switch button.active { color: white; background: #7557ed; }
+    .pro-app { display: none; min-height: calc(100vh - 130px); overflow: hidden; border: 1px solid #30364a; border-radius: 20px; background: #171b28; }
+    .pro-app.active { display: grid; grid-template-columns: 260px minmax(0, 1fr); }
+    .pro-sidebar { display: flex; flex-direction: column; gap: 18px; padding: 20px; border-right: 1px solid #30364a; }
+    .pro-sidebar h2 { margin: 0; font-size: 1rem; }
+    .pro-nav { display: grid; gap: 8px; margin: 0; border: 0; }
+    .pro-nav button { text-align: left; }
+    .pro-nav button.active { background: #342d58; border-color: #6554ab; }
+    .pro-main { min-width: 0; }
+    .pro-pane { display: none; height: 100%; min-height: 70vh; }
+    .pro-pane.active { display: flex; flex-direction: column; }
+    .pro-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 24px; border-bottom: 1px solid #30364a; }
+    .pro-heading h2 { margin: 0; font-size: 1.05rem; }
+    .pro-messages { flex: 1; min-height: 300px; max-height: 62vh; overflow-y: auto; padding: 14px max(20px, 8%); }
+    .pro-composer { padding: 16px max(20px, 8%); border-top: 1px solid #30364a; }
+    .pro-composer textarea { min-height: 52px; max-height: 180px; }
+    .pro-settings { padding: 16px 20px; border-top: 1px solid #30364a; }
+    .pro-settings summary { color: #c8c0ff; cursor: pointer; }
+    .pro-settings .field { margin: 14px 0 0; }
+    .pro-voice { display: grid; flex: 1; place-content: center; justify-items: center; gap: 18px; padding: 30px; text-align: center; }
+    .voice-orb { display: grid; width: 130px; height: 130px; place-items: center; border: 1px solid #9c8cff; border-radius: 50%; background: radial-gradient(circle, #7557ed 0, #342d58 62%, #242039 100%); box-shadow: 0 0 55px #7557ed44; font-size: 2.5rem; }
+    .voice-orb.listening { animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 50% { transform: scale(1.07); box-shadow: 0 0 75px #9c8cff88; } }
+    .voice-transcript { width: min(680px, 100%); max-height: 34vh; overflow: auto; text-align: left; }
+    .voice-transcript .message { max-width: 100%; }
+    @media (max-width: 800px) {
+      .pro-app.active { grid-template-columns: 1fr; }
+      .pro-sidebar { border-right: 0; border-bottom: 1px solid #30364a; }
+      .pro-nav { grid-template-columns: 1fr 1fr; }
+      .pro-pane { min-height: 64vh; }
+      .pro-heading { padding: 16px; }
+      .pro-messages { max-height: 52vh; padding: 12px 16px; }
+      .pro-composer { padding: 12px 16px; }
+    }
     @media (max-width: 800px) {
       .shell { padding: 14px; }
       .chat-layout, .two-column { grid-template-columns: 1fr; }
@@ -85,7 +121,12 @@
         <div class="brand-mark" aria-hidden="true">⚡</div>
         <div><h1>Groq Multimodal Suite</h1><small>Chat, speech, and voice tools</small></div>
       </div>
+      <div class="mode-switch" role="group" aria-label="Interface mode">
+        <button id="classic-mode" class="active" type="button">Classic</button>
+        <button id="pro-mode" type="button">Studio</button>
+      </div>
     </header>
+    <div id="classic-app">
     <nav aria-label="Application sections">
       <button class="active" data-view="chat">💬 Chat &amp; Manager</button>
       <button data-view="agent">🤖 Voice Agent</button>
@@ -143,12 +184,12 @@
       <section id="agent" class="view">
         <div class="card">
           <h2>🤖 Hands-Free Voice Agent</h2>
-          <p class="muted">Set the agent's goal, start a conversation, and speak naturally. It stops after a 1.5-second pause, then listens again after its spoken reply.</p>
+          <p class="muted">Set the agent's goal and speak naturally. It stops after a short pause, or after eight seconds without detected speech, then listens again after its spoken reply.</p>
           <div class="two-column">
             <div class="stack">
               <div class="field">
                 <label for="agent-goal">Agent Goal / System Prompt</label>
-                <textarea id="agent-goal" rows="4">Inform the user that they got an A+ in all their classes with an enthusiastic, proud, and celebratory tone. Keep responses conversational and concise.</textarea>
+                <textarea id="agent-goal" rows="4">You are a helpful, conversational voice assistant. Keep responses concise and natural for speech.</textarea>
               </div>
               <label class="check"><input id="hands-free" type="checkbox" checked> 🎙️ Hands-Free Auto-Listen (auto-stop on pause and resume after the AI speaks)</label>
               <div class="row">
@@ -161,7 +202,7 @@
             <div class="stack">
               <div><label for="agent-speech">1. What You Said (Whisper Turbo)</label><textarea id="agent-speech" rows="2" readonly></textarea></div>
               <div><label for="agent-reply">2. Agent Reply (GPT OSS 20B)</label><textarea id="agent-reply" rows="4" readonly></textarea></div>
-              <div><label>3. Spoken Response (Orpheus - Troy)</label><audio id="agent-audio" controls autoplay></audio></div>
+              <div><label>3. Spoken Response (Orpheus - Troy)</label><audio id="agent-audio" controls></audio></div>
             </div>
           </div>
         </div>
@@ -210,6 +251,82 @@
         </div>
       </section>
     </main>
+    </div>
+    <main id="pro-app" class="pro-app" aria-label="Studio">
+      <aside class="pro-sidebar">
+        <h2>⚡ Groq Studio</h2>
+        <button id="pro-new-chat" class="primary">＋ New conversation</button>
+        <div class="field">
+          <label for="pro-chat-select">Conversations</label>
+          <select id="pro-chat-select"></select>
+        </div>
+        <nav class="pro-nav" aria-label="Studio workspace">
+          <button class="active" data-pane="pro-chat">💬 Chat</button>
+          <button data-pane="pro-voice">🎙️ Voice agent</button>
+        </nav>
+        <p class="muted">Your conversations are saved locally.</p>
+      </aside>
+      <section class="pro-main">
+        <section id="pro-chat" class="pro-pane active">
+          <div class="pro-heading">
+            <h2>Chat</h2>
+            <span class="muted">Groq assistant</span>
+          </div>
+          <div id="pro-messages" class="pro-messages" aria-live="polite"></div>
+          <form id="pro-chat-form" class="pro-composer">
+            <div class="row">
+              <textarea id="pro-chat-message" class="grow" placeholder="Message your assistant…" aria-label="Message your assistant"></textarea>
+              <button id="pro-send-chat" class="primary" type="submit">Send</button>
+            </div>
+            <p id="pro-chat-status" class="status" role="status"></p>
+          </form>
+          <details class="pro-settings">
+            <summary>Assistant settings</summary>
+            <div class="field">
+              <label for="pro-chat-model">Groq model</label>
+              <select id="pro-chat-model">
+                <option>openai/gpt-oss-120b</option>
+                <option>openai/gpt-oss-20b</option>
+              </select>
+            </div>
+            <label class="check field"><input id="pro-web-search" type="checkbox"> Enable web search</label>
+            <div class="field">
+              <label for="pro-system-prompt">Assistant system prompt</label>
+              <textarea id="pro-system-prompt" rows="4">You are a helpful, laid-back AI assistant.</textarea>
+            </div>
+          </details>
+        </section>
+        <section id="pro-voice" class="pro-pane">
+          <div class="pro-heading">
+            <h2>Voice agent</h2>
+            <span class="muted">Speak naturally, hear spoken replies</span>
+          </div>
+          <div class="pro-voice">
+            <div id="pro-voice-orb" class="voice-orb" aria-hidden="true">🎙️</div>
+            <h2>Talk to your assistant</h2>
+            <p id="pro-agent-status" class="status" role="status">Ready when you are.</p>
+            <div class="row">
+              <button id="pro-start-agent" class="primary">▶ Start hands-free</button>
+              <button id="pro-record-agent">Record a turn</button>
+              <button id="pro-stop-agent" disabled>Stop listening</button>
+            </div>
+            <div class="voice-transcript">
+              <div id="pro-agent-messages" aria-live="polite"></div>
+              <audio id="pro-agent-audio" controls></audio>
+            </div>
+          </div>
+          <details class="pro-settings">
+            <summary>Voice agent instructions</summary>
+            <div class="field">
+              <label for="pro-agent-goal">Agent goal / system prompt</label>
+              <textarea id="pro-agent-goal" rows="4">You are a helpful, conversational voice assistant. Keep responses concise and natural for speech.</textarea>
+            </div>
+            <label class="check"><input id="pro-hands-free" type="checkbox" checked> Auto-detect pauses and listen again after each reply</label>
+            <button id="pro-reset-agent" type="button" style="margin-top:12px">Reset conversation</button>
+          </details>
+        </section>
+      </section>
+    </main>
   </div>
 
   <script>
@@ -222,8 +339,11 @@
     let audioContext = null;
     let analyser = null;
     let voiceInterval = null;
+    let microphoneSource = null;
     let shouldContinueHandsFree = false;
     let busyWithAgent = false;
+    let agentGeneration = 0;
+    let noSpeechTimeout = null;
 
     async function request(url, options = {}) {
       const response = await fetch(url, {
@@ -239,19 +359,11 @@
       target.textContent = text;
       target.style.color = isError ? "#ffaaa9" : "";
     }
-    function renderChatList() {
-      const selector = $("#chat-select");
-      selector.replaceChildren();
-      Object.entries(chats).forEach(([id, chat]) => {
-        const option = document.createElement("option");
-        option.value = id;
-        option.textContent = chat.title;
-        selector.append(option);
-      });
-      selector.value = currentChatId;
-    }
     function renderMessages(messages = []) {
-      const container = $("#messages");
+      renderMessageList($("#messages"), messages);
+      renderMessageList($("#pro-messages"), messages);
+    }
+    function renderMessageList(container, messages = []) {
       container.replaceChildren();
       messages.forEach((message) => {
         const bubble = document.createElement("div");
@@ -261,11 +373,42 @@
       });
       container.scrollTop = container.scrollHeight;
     }
+    function renderAgentTurn(speech, reply) {
+      const container = $("#pro-agent-messages");
+      container.replaceChildren();
+      if (speech) {
+        const user = document.createElement("div");
+        user.className = "message user";
+        user.textContent = speech;
+        container.append(user);
+      }
+      if (reply) {
+        const assistant = document.createElement("div");
+        assistant.className = "message assistant";
+        assistant.textContent = reply;
+        container.append(assistant);
+      }
+    }
+    function renderChatList() {
+      const selector = $("#chat-select");
+      const proSelector = $("#pro-chat-select");
+      [selector, proSelector].forEach((list) => {
+        list.replaceChildren();
+        Object.entries(chats).forEach(([id, chat]) => {
+          const option = document.createElement("option");
+          option.value = id;
+          option.textContent = chat.title;
+          list.append(option);
+        });
+        list.value = currentChatId;
+      });
+    }
     function selectChat(id) {
       if (!chats[id]) return;
       currentChatId = id;
       $("#chat-title").value = chats[id].title;
       $("#chat-select").value = id;
+      $("#pro-chat-select").value = id;
       renderMessages(chats[id].messages);
     }
     function audioDataUrl(encoded) {
@@ -285,6 +428,10 @@
       if (!microphoneStream) microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       return microphoneStream;
     }
+    function releaseMicrophone() {
+      microphoneStream?.getTracks().forEach((track) => track.stop());
+      microphoneStream = null;
+    }
     function createRecorder(stream, onComplete) {
       const options = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? { mimeType: "audio/webm;codecs=opus" } : {};
       const recorder = new MediaRecorder(stream, options);
@@ -298,22 +445,43 @@
       return fileAsBase64(file).then((audio) => ({ audio, filename: file.name }));
     }
 
-    document.querySelectorAll("nav button").forEach((button) => {
+    $("#classic-mode").addEventListener("click", () => {
+      $("#classic-app").style.display = "block";
+      $("#pro-app").classList.remove("active");
+      $("#classic-mode").classList.add("active");
+      $("#pro-mode").classList.remove("active");
+    });
+    $("#pro-mode").addEventListener("click", () => {
+      $("#classic-app").style.display = "none";
+      $("#pro-app").classList.add("active");
+      $("#pro-mode").classList.add("active");
+      $("#classic-mode").classList.remove("active");
+    });
+    document.querySelectorAll("#classic-app nav button[data-view]").forEach((button) => {
       button.addEventListener("click", () => {
-        document.querySelectorAll("nav button").forEach((tab) => tab.classList.toggle("active", tab === button));
+        document.querySelectorAll("#classic-app nav button").forEach((tab) => tab.classList.toggle("active", tab === button));
         document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === button.dataset.view));
+      });
+    });
+    document.querySelectorAll(".pro-nav button").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".pro-nav button").forEach((tab) => tab.classList.toggle("active", tab === button));
+        document.querySelectorAll(".pro-pane").forEach((pane) => pane.classList.toggle("active", pane.id === button.dataset.pane));
       });
     });
 
     $("#chat-select").addEventListener("change", (event) => selectChat(event.target.value));
-    $("#new-chat").addEventListener("click", async () => {
+    $("#pro-chat-select").addEventListener("change", (event) => selectChat(event.target.value));
+    async function createChat(statusSelector) {
       try {
         const result = await request("/api/chats", { method: "POST", body: "{}" });
         chats = result.chats;
         selectChat(result.id);
         renderChatList();
-      } catch (error) { setStatus("#chat-status", error.message, true); }
-    });
+      } catch (error) { setStatus(statusSelector, error.message, true); }
+    }
+    $("#new-chat").addEventListener("click", () => createChat("#chat-status"));
+    $("#pro-new-chat").addEventListener("click", () => createChat("#pro-chat-status"));
     $("#rename-chat").addEventListener("click", async () => {
       if (!currentChatId) return;
       try {
@@ -334,22 +502,25 @@
         renderChatList();
       } catch (error) { setStatus("#chat-status", error.message, true); }
     });
-    $("#chat-form").addEventListener("submit", async (event) => {
+    async function sendChat(event, pro = false) {
       event.preventDefault();
-      const message = $("#chat-message").value;
+      const message = $(pro ? "#pro-chat-message" : "#chat-message").value;
       if (!message.trim() || !currentChatId) return;
-      $("#chat-message").value = "";
-      $("#send-chat").disabled = true;
-      setStatus("#chat-status", "Connecting to Groq…");
+      const inputSelector = pro ? "#pro-chat-message" : "#chat-message";
+      const buttonSelector = pro ? "#pro-send-chat" : "#send-chat";
+      const statusSelector = pro ? "#pro-chat-status" : "#chat-status";
+      $(inputSelector).value = "";
+      $(buttonSelector).disabled = true;
+      setStatus(statusSelector, "Connecting to Groq…");
       try {
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message, chat_id: currentChatId,
-            system_prompt: $("#system-prompt").value,
-            model: $("#chat-model").value,
-            enable_search: $("#web-search").checked
+            system_prompt: $(pro ? "#pro-system-prompt" : "#system-prompt").value,
+            model: $(pro ? "#pro-chat-model" : "#chat-model").value,
+            enable_search: $(pro ? "#pro-web-search" : "#web-search").checked
           })
         });
         if (!response.ok) {
@@ -374,99 +545,193 @@
             renderMessages(update.messages);
           }
         }
-        setStatus("#chat-status", "");
-      } catch (error) { setStatus("#chat-status", error.message, true); }
-      finally { $("#send-chat").disabled = false; }
-    });
+        setStatus(statusSelector, "");
+      } catch (error) { setStatus(statusSelector, error.message, true); }
+      finally { $(buttonSelector).disabled = false; }
+    }
+    $("#chat-form").addEventListener("submit", (event) => sendChat(event));
+    $("#pro-chat-form").addEventListener("submit", (event) => sendChat(event, true));
     $("#chat-message").addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         $("#chat-form").requestSubmit();
       }
     });
+    $("#pro-chat-message").addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        $("#pro-chat-form").requestSubmit();
+      }
+    });
 
+    function setAgentStatus(text, isError = false) {
+      setStatus("#agent-status", text, isError);
+      setStatus("#pro-agent-status", text, isError);
+    }
+    function handsFreeEnabled() {
+      return $("#hands-free").checked;
+    }
+    function setAgentListening(listening) {
+      $("#pro-voice-orb").classList.toggle("listening", listening);
+      $("#start-agent").textContent = listening ? "⏹ Stop Hands-Free Conversation" : "▶️ Start Hands-Free Conversation";
+      $("#pro-start-agent").textContent = listening ? "⏹ Stop hands-free" : "▶ Start hands-free";
+      $("#record-agent").textContent = listening ? "Stop Listening" : "Record a Turn";
+      $("#pro-record-agent").textContent = listening ? "Stop listening" : "Record a turn";
+      $("#pro-stop-agent").disabled = !listening;
+    }
+    function stopVoiceMonitoring() {
+      if (voiceInterval) clearInterval(voiceInterval);
+      voiceInterval = null;
+      if (microphoneSource) microphoneSource.disconnect();
+      microphoneSource = null;
+      analyser = null;
+    }
     async function startAgentRecording() {
-      if (busyWithAgent || (mediaRecorder && mediaRecorder.state === "recording")) return;
+      if (busyWithAgent || mediaRecorder?.state === "recording") return;
       const stream = await getMicrophone();
+      if (handsFreeEnabled() && shouldContinueHandsFree) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) throw new Error("Automatic pause detection is not supported in this browser.");
+        if (!audioContext) audioContext = new AudioContextClass();
+        await audioContext.resume();
+      }
+      const generation = agentGeneration;
       mediaRecorder = createRecorder(stream, async (blob) => {
-        if (voiceInterval) clearInterval(voiceInterval);
-        voiceInterval = null;
-        if (!blob.size) return;
+        stopVoiceMonitoring();
+        if (generation !== agentGeneration || !blob.size) return;
         busyWithAgent = true;
-        $("#record-agent").textContent = "Record a Turn";
-        setStatus("#agent-status", "Transcribing and preparing a response…");
+        setAgentListening(false);
+        setAgentStatus("Transcribing and preparing a response…");
         try {
           const input = await blobAsBase64(blob);
           const result = await request("/api/voice", {
             method: "POST",
             body: JSON.stringify({ ...input, goal: $("#agent-goal").value, history: agentHistory })
           });
+          if (generation !== agentGeneration) return;
           $("#agent-speech").value = result.speech;
           $("#agent-reply").value = result.reply;
+          renderAgentTurn(result.speech, result.reply);
           agentHistory = result.history;
           if (result.audio) {
-            $("#agent-audio").src = audioDataUrl(result.audio);
-            $("#agent-audio").load();
-            $("#agent-audio").play().catch(() => {});
+            const audio = $("#pro-app").classList.contains("active") ? $("#pro-agent-audio") : $("#agent-audio");
+            [$("#agent-audio"), $("#pro-agent-audio")].forEach((player) => {
+              player.src = audioDataUrl(result.audio);
+              player.load();
+            });
+            audio.play().catch(() => {
+              setAgentStatus("Reply ready. Tap play to hear it.");
+              if (shouldContinueHandsFree && handsFreeEnabled()) setTimeout(beginNextAgentTurn, 700);
+            });
+            setAgentStatus("Reply ready. Listening will resume after playback.");
+          } else {
+            setAgentStatus(result.speech === "(No speech detected)" ? "No speech detected. Try again." : "Reply ready.");
+            if (shouldContinueHandsFree && handsFreeEnabled()) {
+              setTimeout(beginNextAgentTurn, 700);
+            }
           }
-          setStatus("#agent-status", "Response ready.");
-        } catch (error) { setStatus("#agent-status", error.message, true); }
-        finally { busyWithAgent = false; }
+        } catch (error) {
+          if (generation === agentGeneration) setAgentStatus(error.message, true);
+        } finally {
+          if (generation === agentGeneration) {
+            busyWithAgent = false;
+            if (!shouldContinueHandsFree) releaseMicrophone();
+          }
+        }
       });
       mediaRecorder.start();
-      $("#record-agent").textContent = "Stop Recording";
-      if ($("#hands-free").checked && shouldContinueHandsFree) {
-        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(stream);
+      setAgentListening(true);
+      setAgentStatus("Listening. Speak when ready.");
+      if (handsFreeEnabled() && shouldContinueHandsFree) {
+        microphoneSource = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 512;
-        source.connect(analyser);
-        const values = new Uint8Array(analyser.frequencyBinCount);
+        microphoneSource.connect(analyser);
+        const values = new Uint8Array(analyser.fftSize);
+        const startedAt = Date.now();
         let hasSpoken = false;
-        let silenceStart = 0;
+        let silenceStart = startedAt;
         voiceInterval = setInterval(() => {
-          if (!analyser || !mediaRecorder || mediaRecorder.state !== "recording") return;
-          analyser.getByteFrequencyData(values);
-          const volume = values.reduce((total, value) => total + value, 0) / values.length;
-          if (volume > 18) { hasSpoken = true; silenceStart = 0; }
-          else if (hasSpoken) {
-            if (!silenceStart) silenceStart = Date.now();
-            else if (Date.now() - silenceStart > 1500) mediaRecorder.stop();
+          if (!analyser || mediaRecorder?.state !== "recording") return;
+          analyser.getByteTimeDomainData(values);
+          const rms = Math.sqrt(values.reduce((sum, value) => sum + (value - 128) ** 2, 0) / values.length) / 128;
+          if (rms > 0.025) {
+            hasSpoken = true;
+            silenceStart = 0;
+          } else if (hasSpoken && !silenceStart) {
+            silenceStart = Date.now();
           }
+          const silentTooLong = Date.now() - silenceStart > (hasSpoken ? 1200 : 8000);
+          if (silentTooLong || Date.now() - startedAt > 45000) mediaRecorder.stop();
         }, 100);
       }
     }
-    $("#start-agent").addEventListener("click", async () => {
+    async function beginNextAgentTurn() {
+      if (!shouldContinueHandsFree || !handsFreeEnabled()) return;
+      try { await startAgentRecording(); }
+      catch (error) { setAgentStatus(error.message, true); }
+    }
+    function stopAgentListening() {
+      shouldContinueHandsFree = false;
+      if (mediaRecorder?.state === "recording") mediaRecorder.stop();
+      else {
+        stopVoiceMonitoring();
+        releaseMicrophone();
+        setAgentListening(false);
+        setAgentStatus("Voice agent stopped.");
+      }
+    }
+    async function startHandsFreeAgent() {
       shouldContinueHandsFree = true;
-      try {
-        await startAgentRecording();
-        setStatus("#agent-status", "Listening. Speak when ready.");
-      } catch (error) { setStatus("#agent-status", error.message, true); }
-    });
-    $("#record-agent").addEventListener("click", async () => {
+      try { await startAgentRecording(); }
+      catch (error) { shouldContinueHandsFree = false; setAgentStatus(error.message, true); }
+    }
+    async function toggleAgentTurn() {
       if (mediaRecorder?.state === "recording") {
+        shouldContinueHandsFree = false;
         mediaRecorder.stop();
       } else {
         shouldContinueHandsFree = false;
-        try { await startAgentRecording(); setStatus("#agent-status", "Recording… press Stop Recording when finished."); }
-        catch (error) { setStatus("#agent-status", error.message, true); }
+        try { await startAgentRecording(); setAgentStatus("Recording… stop listening when you finish."); }
+        catch (error) { setAgentStatus(error.message, true); }
       }
+    }
+    $("#start-agent").addEventListener("click", () => {
+      if (shouldContinueHandsFree) stopAgentListening();
+      else startHandsFreeAgent();
     });
-    $("#agent-audio").addEventListener("ended", async () => {
-      if (shouldContinueHandsFree && $("#hands-free").checked) {
-        try { await startAgentRecording(); setStatus("#agent-status", "Listening for your next turn."); }
-        catch (error) { setStatus("#agent-status", error.message, true); }
-      }
+    $("#pro-start-agent").addEventListener("click", () => {
+      if (shouldContinueHandsFree) stopAgentListening();
+      else startHandsFreeAgent();
     });
-    $("#reset-agent").addEventListener("click", () => {
+    $("#record-agent").addEventListener("click", toggleAgentTurn);
+    $("#pro-record-agent").addEventListener("click", toggleAgentTurn);
+    $("#pro-stop-agent").addEventListener("click", stopAgentListening);
+    [$("#agent-audio"), $("#pro-agent-audio")].forEach((player) => {
+      player.addEventListener("ended", beginNextAgentTurn);
+    });
+    $("#agent-goal").addEventListener("input", () => { $("#pro-agent-goal").value = $("#agent-goal").value; });
+    $("#pro-agent-goal").addEventListener("input", () => { $("#agent-goal").value = $("#pro-agent-goal").value; });
+    $("#hands-free").addEventListener("change", () => { $("#pro-hands-free").checked = $("#hands-free").checked; });
+    $("#pro-hands-free").addEventListener("change", () => { $("#hands-free").checked = $("#pro-hands-free").checked; });
+    function resetAgent() {
+      agentGeneration++;
+      busyWithAgent = false;
       agentHistory = [];
       $("#agent-speech").value = "";
       $("#agent-reply").value = "";
       $("#agent-audio").removeAttribute("src");
+      $("#pro-agent-audio").removeAttribute("src");
+      $("#pro-agent-messages").replaceChildren();
       shouldContinueHandsFree = false;
+      stopVoiceMonitoring();
       if (mediaRecorder?.state === "recording") mediaRecorder.stop();
-      setStatus("#agent-status", "Conversation memory reset.");
-    });
+      releaseMicrophone();
+      setAgentListening(false);
+      setAgentStatus("Conversation memory reset.");
+    }
+    $("#reset-agent").addEventListener("click", resetAgent);
+    $("#pro-reset-agent").addEventListener("click", resetAgent);
 
     let sttRecorder = null;
     $("#record-stt").addEventListener("click", async () => {
