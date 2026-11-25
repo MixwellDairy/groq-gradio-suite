@@ -1,0 +1,4 @@
+.env
+chats.json
+*.wav
+__pycache__/
