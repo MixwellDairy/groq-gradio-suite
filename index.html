@@ -428,6 +428,10 @@
       if (!microphoneStream) microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       return microphoneStream;
     }
+    function releaseMicrophone() {
+      microphoneStream?.getTracks().forEach((track) => track.stop());
+      microphoneStream = null;
+    }
     function createRecorder(stream, onComplete) {
       const options = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? { mimeType: "audio/webm;codecs=opus" } : {};
       const recorder = new MediaRecorder(stream, options);
@@ -629,7 +633,10 @@
         } catch (error) {
           if (generation === agentGeneration) setAgentStatus(error.message, true);
         } finally {
-          if (generation === agentGeneration) busyWithAgent = false;
+          if (generation === agentGeneration) {
+            busyWithAgent = false;
+            if (!shouldContinueHandsFree) releaseMicrophone();
+          }
         }
       });
       mediaRecorder.start();
@@ -669,6 +676,7 @@
       if (mediaRecorder?.state === "recording") mediaRecorder.stop();
       else {
         stopVoiceMonitoring();
+        releaseMicrophone();
         setAgentListening(false);
         setAgentStatus("Voice agent stopped.");
       }
@@ -718,6 +726,7 @@
       shouldContinueHandsFree = false;
       stopVoiceMonitoring();
       if (mediaRecorder?.state === "recording") mediaRecorder.stop();
+      releaseMicrophone();
       setAgentListening(false);
       setAgentStatus("Conversation memory reset.");
     }
