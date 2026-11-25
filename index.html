@@ -93,6 +93,7 @@
     .pro-voice { display: grid; flex: 1; place-content: center; justify-items: center; gap: 18px; padding: 30px; text-align: center; }
     .voice-orb { display: grid; width: 130px; height: 130px; place-items: center; border: 1px solid #9c8cff; border-radius: 50%; background: radial-gradient(circle, #7557ed 0, #342d58 62%, #242039 100%); box-shadow: 0 0 55px #7557ed44; font-size: 2.5rem; }
     .voice-orb.listening { animation: pulse 1.6s ease-in-out infinite; }
+    .agent-waveform { display: block; width: min(600px, 100%); height: 72px; border: 1px solid #353c51; border-radius: 10px; background: #171b28; }
     @keyframes pulse { 50% { transform: scale(1.07); box-shadow: 0 0 75px #9c8cff88; } }
     .voice-transcript { width: min(680px, 100%); max-height: 34vh; overflow: auto; text-align: left; }
     .voice-transcript .message { max-width: 100%; }
@@ -184,7 +185,7 @@
       <section id="agent" class="view">
         <div class="card">
           <h2>🤖 Hands-Free Voice Agent</h2>
-          <p class="muted">Set the agent's goal and speak naturally. It stops after a short pause, or after eight seconds without detected speech, then listens again after its spoken reply.</p>
+          <p class="muted">Set the agent's goal and speak naturally. It stops after about two seconds of silence, or after eight seconds without detected speech, then listens again after its spoken reply.</p>
           <div class="two-column">
             <div class="stack">
               <div class="field">
@@ -198,6 +199,7 @@
               </div>
               <button id="reset-agent">🔄 Reset Conversation Memory</button>
               <p id="agent-status" class="status" role="status"></p>
+              <canvas class="agent-waveform" width="600" height="72" role="img" aria-label="Voice agent audio waveform"></canvas>
             </div>
             <div class="stack">
               <div><label for="agent-speech">1. What You Said (Whisper Turbo)</label><textarea id="agent-speech" rows="2" readonly></textarea></div>
@@ -303,6 +305,7 @@
           </div>
           <div class="pro-voice">
             <div id="pro-voice-orb" class="voice-orb" aria-hidden="true">🎙️</div>
+            <canvas class="agent-waveform" width="600" height="72" role="img" aria-label="Voice agent audio waveform"></canvas>
             <h2>Talk to your assistant</h2>
             <p id="pro-agent-status" class="status" role="status">Ready when you are.</p>
             <div class="row">
@@ -340,6 +343,10 @@
     let analyser = null;
     let voiceInterval = null;
     let microphoneSource = null;
+    let waveformAnalyser = null;
+    let waveformFrame = null;
+    let activePlayback = null;
+    const playbackMonitors = new WeakMap();
     let shouldContinueHandsFree = false;
     let busyWithAgent = false;
     let agentGeneration = 0;
@@ -599,21 +606,82 @@
       $("#pro-record-agent").textContent = listening ? "Stop listening" : "Record a turn";
       $("#pro-stop-agent").disabled = !listening;
     }
+    function drawAgentWaveform() {
+      if (waveformFrame) return;
+      const values = new Uint8Array(waveformAnalyser?.fftSize || 128);
+      const draw = () => {
+        waveformFrame = requestAnimationFrame(draw);
+        document.querySelectorAll(".agent-waveform").forEach((canvas) => {
+          const context = canvas.getContext("2d");
+          const width = canvas.width;
+          const height = canvas.height;
+          context.clearRect(0, 0, width, height);
+          context.strokeStyle = "#9c8cff";
+          context.lineWidth = 2;
+          context.beginPath();
+          if (waveformAnalyser) waveformAnalyser.getByteTimeDomainData(values);
+          for (let x = 0; x < width; x++) {
+            const sample = waveformAnalyser ? values[Math.floor(x * values.length / width)] : 128;
+            const y = height / 2 + (sample - 128) * (height / 256) * 1.8;
+            if (x === 0) context.moveTo(x, y);
+            else context.lineTo(x, y);
+          }
+          context.stroke();
+        });
+      };
+      waveformFrame = requestAnimationFrame(draw);
+    }
+    function setAgentWaveform(analyserNode) {
+      waveformAnalyser = analyserNode;
+      if (analyserNode) {
+        drawAgentWaveform();
+      } else if (waveformFrame) {
+        cancelAnimationFrame(waveformFrame);
+        waveformFrame = null;
+        document.querySelectorAll(".agent-waveform").forEach((canvas) => {
+          const context = canvas.getContext("2d");
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          context.strokeStyle = "#555d73";
+          context.lineWidth = 2;
+          context.beginPath();
+          context.moveTo(0, canvas.height / 2);
+          context.lineTo(canvas.width, canvas.height / 2);
+          context.stroke();
+        });
+      }
+    }
+    function monitorAgentPlayback(audio) {
+      if (!audioContext) return;
+      let monitor = playbackMonitors.get(audio);
+      if (!monitor) {
+        const source = audioContext.createMediaElementSource(audio);
+        const playbackAnalyser = audioContext.createAnalyser();
+        playbackAnalyser.fftSize = 512;
+        source.connect(playbackAnalyser);
+        playbackAnalyser.connect(audioContext.destination);
+        monitor = { analyser: playbackAnalyser };
+        playbackMonitors.set(audio, monitor);
+      }
+      activePlayback = audio;
+      setAgentWaveform(monitor.analyser);
+    }
     function stopVoiceMonitoring() {
       if (voiceInterval) clearInterval(voiceInterval);
       voiceInterval = null;
       if (microphoneSource) microphoneSource.disconnect();
       microphoneSource = null;
       analyser = null;
+      setAgentWaveform(null);
     }
     async function startAgentRecording() {
       if (busyWithAgent || mediaRecorder?.state === "recording") return;
       const stream = await getMicrophone();
-      if (handsFreeEnabled() && shouldContinueHandsFree) {
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextClass) throw new Error("Automatic pause detection is not supported in this browser.");
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
         if (!audioContext) audioContext = new AudioContextClass();
         await audioContext.resume();
+      } else if (handsFreeEnabled() && shouldContinueHandsFree) {
+        throw new Error("Automatic pause detection is not supported in this browser.");
       }
       const generation = agentGeneration;
       mediaRecorder = createRecorder(stream, async (blob) => {
@@ -639,8 +707,14 @@
               player.src = audioDataUrl(result.audio);
               player.load();
             });
+            try { monitorAgentPlayback(audio); }
+            catch (error) { console.warn("Could not display the playback waveform.", error); }
             audio.play().catch(() => {
               setAgentStatus("Reply ready. Tap play to hear it.");
+              if (activePlayback === audio) {
+                activePlayback = null;
+                setAgentWaveform(null);
+              }
               if (shouldContinueHandsFree && handsFreeEnabled()) setTimeout(beginNextAgentTurn, 700);
             });
             setAgentStatus("Reply ready. Listening will resume after playback.");
@@ -662,11 +736,14 @@
       mediaRecorder.start();
       setAgentListening(true);
       setAgentStatus("Listening. Speak when ready.");
-      if (handsFreeEnabled() && shouldContinueHandsFree) {
+      if (audioContext) {
         microphoneSource = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 512;
         microphoneSource.connect(analyser);
+        setAgentWaveform(analyser);
+      }
+      if (handsFreeEnabled() && shouldContinueHandsFree) {
         const values = new Uint8Array(analyser.fftSize);
         const startedAt = Date.now();
         let hasSpoken = false;
@@ -681,7 +758,7 @@
           } else if (hasSpoken && !silenceStart) {
             silenceStart = Date.now();
           }
-          const silentTooLong = Date.now() - silenceStart > (hasSpoken ? 1200 : 8000);
+          const silentTooLong = Date.now() - silenceStart > (hasSpoken ? 2000 : 8000);
           if (silentTooLong || Date.now() - startedAt > 45000) mediaRecorder.stop();
         }, 100);
       }
@@ -728,7 +805,23 @@
     $("#pro-record-agent").addEventListener("click", toggleAgentTurn);
     $("#pro-stop-agent").addEventListener("click", stopAgentListening);
     [$("#agent-audio"), $("#pro-agent-audio")].forEach((player) => {
-      player.addEventListener("ended", beginNextAgentTurn);
+      player.addEventListener("play", () => {
+        try { monitorAgentPlayback(player); }
+        catch (error) { console.warn("Could not display the playback waveform.", error); }
+      });
+      player.addEventListener("pause", () => {
+        if (activePlayback === player && !player.ended) {
+          activePlayback = null;
+          setAgentWaveform(null);
+        }
+      });
+      player.addEventListener("ended", () => {
+        if (activePlayback === player) {
+          activePlayback = null;
+          setAgentWaveform(null);
+        }
+        beginNextAgentTurn();
+      });
     });
     $("#agent-goal").addEventListener("input", () => { $("#pro-agent-goal").value = $("#agent-goal").value; });
     $("#pro-agent-goal").addEventListener("input", () => { $("#agent-goal").value = $("#pro-agent-goal").value; });
