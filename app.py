@@ -1,7 +1,6 @@
 import base64
 import json
 import os
-import tempfile
 import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,6 +12,48 @@ MAX_REQUEST_SIZE = 35 * 1024 * 1024
 chats_lock = threading.Lock()
 client_lock = threading.Lock()
 client = None
+
+
+def memory_limit_bytes():
+    limits = []
+    for path in (
+        Path("/sys/fs/cgroup/memory.max"),
+        Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"),
+    ):
+        try:
+            value = path.read_text(encoding="ascii").strip()
+            if value != "max":
+                limit = int(value)
+                if 0 < limit < 1 << 60:
+                    limits.append(limit)
+        except (OSError, ValueError):
+            pass
+    if limits:
+        return min(limits)
+    try:
+        return os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
+    except (OSError, ValueError):
+        return None
+
+
+def request_worker_limit():
+    configured_limit = os.environ.get("MAX_REQUEST_WORKERS")
+    if configured_limit:
+        try:
+            return max(1, int(configured_limit))
+        except ValueError:
+            pass
+
+    try:
+        cpu_count = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        cpu_count = os.cpu_count() or 1
+    cpu_limit = max(2, cpu_count * 4)
+    memory_limit = memory_limit_bytes()
+    if memory_limit is None:
+        return min(cpu_limit, 32)
+    memory_workers = max(2, memory_limit // (256 * 1024 * 1024))
+    return min(cpu_limit, memory_workers)
 
 
 def get_client():
@@ -44,7 +85,7 @@ def load_chats():
 def save_chats(chats):
     try:
         with open(CHATS_FILE, "w", encoding="utf-8") as file:
-            json.dump(chats, file, indent=2)
+            json.dump(chats, file, separators=(",", ":"))
     except OSError as error:
         print(f"Error saving chats: {error}")
 
@@ -65,17 +106,7 @@ def search_web(query):
 
 
 def audio_bytes_to_base64(response):
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as audio_file:
-        path = audio_file.name
-    try:
-        response.write_to_file(path)
-        with open(path, "rb") as audio_file:
-            return base64.b64encode(audio_file.read()).decode("ascii")
-    finally:
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
+    return base64.b64encode(response.read()).decode("ascii")
 
 
 def transcribe_audio(audio_data, filename, model_name):
@@ -332,7 +363,7 @@ class AppHandler(BaseHTTPRequestHandler):
         api_messages = [{"role": "system", "content": system_content}]
         api_messages.extend(chat["messages"][:-2])
         api_messages.append({"role": "user", "content": message})
-        partial_response = ""
+        response_parts = []
         try:
             stream = get_client().chat.completions.create(
                 model=data.get("model", "openai/gpt-oss-120b"),
@@ -341,14 +372,15 @@ class AppHandler(BaseHTTPRequestHandler):
             )
             for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta.content is not None:
-                    partial_response += chunk.choices[0].delta.content
-                    chat["messages"][-1]["content"] = partial_response
+                    delta = chunk.choices[0].delta.content
+                    response_parts.append(delta)
                     self._send_event(
                         {
                             "chat_id": chat_id,
-                            "delta": chunk.choices[0].delta.content,
+                            "delta": delta,
                         }
                     )
+            chat["messages"][-1]["content"] = "".join(response_parts)
         except Exception as error:
             chat["messages"][-1]["content"] = f"⚠️ **API Error:** {error}"
 
@@ -374,9 +406,43 @@ class AppHandler(BaseHTTPRequestHandler):
         print(f"{self.address_string()} - {format_string % args}")
 
 
+class ResourceAwareHTTPServer(ThreadingHTTPServer):
+    def __init__(self, server_address, request_handler):
+        self.request_limit = request_worker_limit()
+        self.request_slots = threading.BoundedSemaphore(self.request_limit)
+        super().__init__(server_address, request_handler)
+
+    def process_request(self, request, client_address):
+        if not self.request_slots.acquire(blocking=False):
+            try:
+                request.sendall(
+                    b"HTTP/1.1 503 Service Unavailable\r\n"
+                    b"Retry-After: 1\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+                )
+            except OSError:
+                pass
+            finally:
+                self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self.request_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.request_slots.release()
+
+
 if __name__ == "__main__":
-    server = ThreadingHTTPServer(
+    server = ResourceAwareHTTPServer(
         ("0.0.0.0", int(os.environ.get("PORT", 7860))), AppHandler
     )
-    print(f"Groq Multimodal Suite listening on port {server.server_port}")
+    print(
+        f"Groq Multimodal Suite listening on port {server.server_port} "
+        f"with up to {server.request_limit} concurrent requests"
+    )
     server.serve_forever()
