@@ -7,17 +7,25 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from ddgs import DDGS
-from dotenv import load_dotenv
-from groq import Groq
-
-load_dotenv()
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
-
 CHATS_FILE = "chats.json"
 UI_FILE = Path(__file__).with_name("index.html")
 MAX_REQUEST_SIZE = 35 * 1024 * 1024
 chats_lock = threading.Lock()
+client_lock = threading.Lock()
+client = None
+
+
+def get_client():
+    global client
+    if client is None:
+        with client_lock:
+            if client is None:
+                from dotenv import load_dotenv
+                from groq import Groq
+
+                load_dotenv()
+                client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+    return client
 
 
 def load_chats():
@@ -43,6 +51,8 @@ def save_chats(chats):
 
 def search_web(query):
     try:
+        from ddgs import DDGS
+
         results = list(DDGS().text(query, max_results=3))
         if results:
             return "\n\n".join(
@@ -69,7 +79,7 @@ def audio_bytes_to_base64(response):
 
 
 def transcribe_audio(audio_data, filename, model_name):
-    return client.audio.transcriptions.create(
+    return get_client().audio.transcriptions.create(
         file=(os.path.basename(filename), audio_data),
         model=model_name,
         response_format="text",
@@ -77,7 +87,7 @@ def transcribe_audio(audio_data, filename, model_name):
 
 
 def generate_speech(text, model_name, voice_name):
-    response = client.audio.speech.create(
+    response = get_client().audio.speech.create(
         model=model_name,
         voice=voice_name.lower(),
         input=text,
@@ -102,7 +112,7 @@ def run_voice_agent(audio_data, filename, agent_goal, agent_history):
     messages.extend(agent_history)
     messages.append({"role": "user", "content": user_speech_text.strip()})
 
-    completion = client.chat.completions.create(
+    completion = get_client().chat.completions.create(
         model="openai/gpt-oss-20b",
         messages=messages,
     )
@@ -111,7 +121,7 @@ def run_voice_agent(audio_data, filename, agent_goal, agent_history):
         {"role": "user", "content": user_speech_text.strip()},
         {"role": "assistant", "content": agent_reply_text},
     ]
-    response = client.audio.speech.create(
+    response = get_client().audio.speech.create(
         model="canopylabs/orpheus-v1-english",
         voice="troy",
         input=agent_reply_text,
@@ -324,7 +334,7 @@ class AppHandler(BaseHTTPRequestHandler):
         api_messages.append({"role": "user", "content": message})
         partial_response = ""
         try:
-            stream = client.chat.completions.create(
+            stream = get_client().chat.completions.create(
                 model=data.get("model", "openai/gpt-oss-120b"),
                 messages=api_messages,
                 stream=True,
