@@ -373,6 +373,25 @@
       });
       container.scrollTop = container.scrollHeight;
     }
+    function appendMessageDelta(delta) {
+      [$("#messages"), $("#pro-messages")].forEach((container) => {
+        let bubble = container.lastElementChild;
+        if (!bubble || !bubble.classList.contains("assistant")) {
+          bubble = document.createElement("div");
+          bubble.className = "message assistant pending";
+          container.append(bubble);
+        }
+        if (bubble.classList.contains("pending")) {
+          bubble.classList.remove("pending");
+          bubble.textContent = delta;
+        } else if (bubble.firstChild) {
+          bubble.firstChild.appendData(delta);
+        } else {
+          bubble.textContent = delta;
+        }
+        container.scrollTop = container.scrollHeight;
+      });
+    }
     function renderAgentTurn(speech, reply) {
       const container = $("#pro-agent-messages");
       container.replaceChildren();
@@ -542,7 +561,8 @@
             const update = JSON.parse(line.slice(6));
             if (update.chat_id !== currentChatId) continue;
             if (update.chats) { chats = update.chats; renderChatList(); }
-            renderMessages(update.messages);
+            if (update.delta !== undefined) appendMessageDelta(update.delta);
+            else if (update.messages) renderMessages(update.messages);
           }
         }
         setStatus(statusSelector, "");

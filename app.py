@@ -346,7 +346,6 @@ class AppHandler(BaseHTTPRequestHandler):
                     self._send_event(
                         {
                             "chat_id": chat_id,
-                            "messages": chat["messages"],
                             "delta": chunk.choices[0].delta.content,
                         }
                     )
